@@ -83,7 +83,7 @@
       height: 100%;
       width: 0%;
       background: var(--number-color);
-      transition: width 0.1s linear; /* Transition accélérée pour affichage réactif */
+      transition: width 0.08s linear;
       border-radius: 3px;
     }
 
@@ -194,7 +194,7 @@
       <div class="gauge-container"><div id="spmGauge" class="gauge-bar"></div></div>
     </div>
 
-    <div class="card" onclick="openConfig('intensity', 'Intensité (m/s²)')">
+    <div class="card" onclick="openConfig('intensity', 'Intensité Y (m/s²)')">
       <div class="unit">INTENSITÉ</div>
       <div id="intensityDisplay" class="value-small">0.00</div>
       <div class="unit">m/s²</div>
@@ -323,7 +323,7 @@
     let strokeCount = 0;
     let lastStrokeTime = 0;
     let threshold = 0.30;
-    let minInterval = 300; // Ajusté pour supporter les hautes cadences de sprint
+    let minInterval = 300;
     let wakeLock = null;
 
     // Horloges
@@ -344,14 +344,14 @@
     let chartMaxY = 3.0;
     let refractoryPointsLeft = 0;
 
-    // Filtre axe Y
+    // Filtre axe Y (Avancement)
     let yBaseline = null;
-    const alpha = 0.92;
+    const alpha = 0.95;
 
     // Configuration des jauges
     const gaugeLimits = {
       spm: { min: 40, max: 160 },
-      intensity: { min: 0.2, max: 2.5 },
+      intensity: { min: 0.1, max: 2.0 },
       speedInst: { min: 0, max: 25 },
       speedAvg: { min: 0, max: 20 }
     };
@@ -454,7 +454,7 @@
               tension: 0.1
             },
             {
-              label: 'Délai',
+              label: 'Refractaire',
               data: Array(maxDataPoints).fill(null),
               backgroundColor: 'rgba(255, 77, 77, 0.25)',
               borderWidth: 0,
@@ -570,13 +570,11 @@
       }
     }
 
-    // Gestion instantanée des données GPS
     function handleGpsPosition(pos) {
       if (!pos.coords || pos.coords.speed === null || pos.coords.speed === undefined) return;
 
       const speedKmH = Math.max(0, pos.coords.speed * 3.6);
       
-      // Mise à jour directe du DOM
       document.getElementById('speedInstDisplay').innerText = speedKmH.toFixed(1);
       updateGauge('speedInstGauge', speedKmH, gaugeLimits.speedInst.min, gaugeLimits.speedInst.max);
 
@@ -602,7 +600,6 @@
 
         window.addEventListener('devicemotion', handleMotion);
         
-        // Configuration GPS à fréquence maximale (maximumAge: 0 et timeout court)
         if ('geolocation' in navigator) {
           watchId = navigator.geolocation.watchPosition(
             handleGpsPosition, 
@@ -641,7 +638,7 @@
       }
     });
 
-    // Détection ultra-réactive des coups et calcul de SPM instantané
+    // Traitement dynamique de l'accélération axiale Y
     function handleMotion(event) {
       const acc = event.accelerationIncludingGravity;
       if (!acc || acc.y === null) return;
@@ -652,7 +649,10 @@
         yBaseline = rawY;
       }
 
+      // Filtre passe-bas pour soustraire l'effet de l'inclinaison/gravité sur Y
       yBaseline = alpha * yBaseline + (1 - alpha) * rawY;
+      
+      // Signal utile : surcroît d'accélération d'avancement
       const yForwardAcc = Math.abs(rawY - yBaseline);
 
       updateChart(yForwardAcc);
@@ -668,7 +668,7 @@
           document.getElementById('intensityDisplay').innerText = yForwardAcc.toFixed(2);
           updateGauge('intensityGauge', yForwardAcc, gaugeLimits.intensity.min, gaugeLimits.intensity.max);
 
-          // Calcul immédiat du SPM dès le 2ème coup
+          // Calcul direct du SPM instantané
           if (lastStrokeTime > 0) {
             const instantSPM = Math.round(60000 / timeDiff);
             document.getElementById('spmDisplay').innerText = instantSPM;
@@ -678,7 +678,7 @@
           refractoryPointsLeft = Math.round(minInterval / 50);
           isPaddling = true;
 
-          // Détection d'arrêt de pagement raccourcie à 2,2 secondes (adaptée aux pauses en course)
+          // Remise à zéro rapide si arrêt de la cadence
           clearTimeout(strokeTimeout);
           strokeTimeout = setTimeout(() => {
             isPaddling = false;
