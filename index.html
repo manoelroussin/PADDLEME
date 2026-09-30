@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PADDLEME</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg-color: #0d1117;
@@ -20,9 +21,11 @@
       color: var(--text-color);
       font-family: system-ui, -apple-system, sans-serif;
       text-align: center;
+      user-select: none;
     }
     h1 { margin: 5px 0 10px; color: var(--accent-color); letter-spacing: 2px; font-size: 1.4rem; }
     
+    /* Grilles compactes */
     .grid-3 {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -42,6 +45,13 @@
       border-radius: 10px;
       padding: 8px 5px;
       border: 1px solid #30363d;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .card:active {
+      border-color: var(--accent-color);
     }
     
     .value-small {
@@ -59,7 +69,69 @@
       font-family: monospace;
     }
 
-    .unit { font-size: 0.75rem; color: var(--subtext-color); font-weight: 600; }
+    .unit { font-size: 0.72rem; color: var(--subtext-color); font-weight: 600; }
+    
+    /* Jauges sous les cartes */
+    .gauge-container {
+      width: 100%;
+      height: 6px;
+      background-color: #21262d;
+      border-radius: 3px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+    
+    .gauge-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00ffcc, #ffab00, #ff4d4d);
+      transition: width 0.3s ease;
+      border-radius: 3px;
+    }
+
+    /* Modale de réglage Min/Max */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #30363d;
+      width: 80%;
+      max-width: 300px;
+      text-align: left;
+    }
+
+    .modal-content h3 { margin-top: 0; color: var(--accent-color); font-size: 1.1rem; }
+    .modal-content label { display: block; margin: 10px 0 4px; font-size: 0.9rem; }
+    .modal-content input[type=number] {
+      width: 100%;
+      padding: 8px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #fff;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+
+    /* Container du graphique */
+    .chart-container {
+      background-color: var(--card-bg);
+      border-radius: 10px;
+      padding: 8px;
+      border: 1px solid #30363d;
+      margin-bottom: 8px;
+      height: 130px;
+      position: relative;
+    }
     
     .controls {
       background-color: var(--card-bg);
@@ -92,10 +164,8 @@
       cursor: pointer;
     }
     
-    .btn-lap {
-      background-color: #388bfd;
-      color: #fff;
-    }
+    .btn-lap { background-color: #388bfd; color: #fff; }
+    .btn-modal { margin-top: 15px; padding: 10px; font-size: 0.9rem; }
 
     button:active { opacity: 0.8; }
   </style>
@@ -106,49 +176,61 @@
 
   <!-- Top métriques : Cadence, Intensité, Coups -->
   <div class="grid-3">
-    <div class="card">
+    <div class="card" onclick="openConfig('spm', 'Cadence (SPM)')">
       <div class="unit">CADENCE</div>
       <div id="spmDisplay" class="value-small">0</div>
       <div class="unit">SPM</div>
+      <div class="gauge-container"><div id="spmGauge" class="gauge-bar"></div></div>
     </div>
-    <div class="card">
+
+    <div class="card" onclick="openConfig('intensity', 'Intensité (m/s²)')">
       <div class="unit">INTENSITÉ</div>
       <div id="intensityDisplay" class="value-small">0.0</div>
       <div class="unit">m/s²</div>
+      <div class="gauge-container"><div id="intensityGauge" class="gauge-bar"></div></div>
     </div>
-    <div class="card">
+
+    <div class="card" style="cursor: default;">
       <div class="unit">COUPS</div>
       <div id="countDisplay" class="value-small">0</div>
       <div class="unit">total</div>
     </div>
   </div>
 
-  <!-- Vitesses GPS : Instantanée & Moyenne active -->
+  <!-- Vitesses GPS -->
   <div class="grid-2">
-    <div class="card">
+    <div class="card" onclick="openConfig('speedInst', 'Vitesse Inst. (km/h)')">
       <div class="unit">VITESSE INST.</div>
       <div id="speedInstDisplay" class="value-small">0.0</div>
       <div class="unit">km/h</div>
+      <div class="gauge-container"><div id="speedInstGauge" class="gauge-bar"></div></div>
     </div>
-    <div class="card">
+
+    <div class="card" onclick="openConfig('speedAvg', 'Vit. Moyenne (km/h)')">
       <div class="unit">VIT. MOY. (ACTIF)</div>
       <div id="speedAvgDisplay" class="value-small">0.0</div>
       <div class="unit">km/h</div>
+      <div class="gauge-container"><div id="speedAvgGauge" class="gauge-bar"></div></div>
     </div>
   </div>
 
   <!-- Chronos -->
   <div class="grid-2">
-    <div class="card">
+    <div class="card" style="cursor: default;">
       <div class="unit">TEMPS ACTIF</div>
       <div id="activeTimeDisplay" class="value-time">00:00</div>
       <div class="unit">sans pauses</div>
     </div>
-    <div class="card">
+    <div class="card" style="cursor: default;">
       <div class="unit">CHRONO LAP</div>
       <div id="lapTimeDisplay" class="value-time">00:00</div>
       <div class="unit">tour en cours</div>
     </div>
+  </div>
+
+  <!-- Graphique d'accélération en direct -->
+  <div class="chart-container">
+    <canvas id="accChart"></canvas>
   </div>
 
   <div class="btn-group">
@@ -169,6 +251,20 @@
 
   <button id="startBtn">DÉMARRER LA SESSION</button>
 
+  <!-- Modale de réglage Min/Max -->
+  <div id="configModal" class="modal">
+    <div class="modal-content">
+      <h3 id="modalTitle">Réglage Jauge</h3>
+      <label for="minVal">Valeur Minimum :</label>
+      <input type="number" id="minVal" step="0.1">
+
+      <label for="maxVal">Valeur Maximum :</label>
+      <input type="number" id="maxVal" step="0.1">
+
+      <button onclick="saveConfig()" class="btn-modal">Valider</button>
+    </div>
+  </div>
+
   <script>
     let isRunning = false;
     let strokeCount = 0;
@@ -177,7 +273,7 @@
     let minInterval = 800;
     let wakeLock = null;
 
-    // Gestion du temps
+    // Horloges
     let activeTimeSeconds = 0;
     let lapTimeSeconds = 0;
     let activeTimer = null;
@@ -189,24 +285,98 @@
     let activeSpeedSum = 0;
     let activeSpeedCount = 0;
 
-    const thresholdInput = document.getElementById('threshold');
-    const thresholdVal = document.getElementById('thresholdVal');
-    const intervalInput = document.getElementById('interval');
-    const intervalVal = document.getElementById('intervalVal');
-    const startBtn = document.getElementById('startBtn');
-    const lapBtn = document.getElementById('lapBtn');
+    // Graphique Chart.js
+    let chart;
+    const maxDataPoints = 50;
 
-    thresholdInput.addEventListener('input', (e) => {
+    // Configuration des Min/Max pour les jauges
+    const gaugeLimits = {
+      spm: { min: 30, max: 90 },
+      intensity: { min: 2, max: 8 },
+      speedInst: { min: 0, max: 15 },
+      speedAvg: { min: 0, max: 12 }
+    };
+
+    let currentConfigKey = null;
+
+    function openConfig(key, title) {
+      currentConfigKey = key;
+      document.getElementById('modalTitle').innerText = title;
+      document.getElementById('minVal').value = gaugeLimits[key].min;
+      document.getElementById('maxVal').value = gaugeLimits[key].max;
+      document.getElementById('configModal').style.display = 'flex';
+    }
+
+    function saveConfig() {
+      if (currentConfigKey) {
+        const min = parseFloat(document.getElementById('minVal').value);
+        const max = parseFloat(document.getElementById('maxVal').value);
+
+        if (!isNaN(min) && !isNaN(max) && max > min) {
+          gaugeLimits[currentConfigKey].min = min;
+          gaugeLimits[currentConfigKey].max = max;
+        }
+      }
+      document.getElementById('configModal').style.display = 'none';
+    }
+
+    function updateGauge(gaugeId, value, min, max) {
+      const percentage = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
+      document.getElementById(gaugeId).style.width = percentage + '%';
+    }
+
+    function initChart() {
+      const ctx = document.getElementById('accChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: Array(maxDataPoints).fill(''),
+          datasets: [{
+            label: 'Accélération (m/s²)',
+            data: Array(maxDataPoints).fill(0),
+            borderColor: '#00ffcc',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false,
+            tension: 0.2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            x: { display: false },
+            y: {
+              min: 0,
+              max: 10,
+              grid: { color: '#30363d' },
+              ticks: { color: '#8b949e', font: { size: 9 } }
+            }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function updateChart(value) {
+      if (!chart) return;
+      chart.data.datasets[0].data.push(value);
+      chart.data.datasets[0].data.shift();
+      chart.update('none');
+    }
+
+    document.getElementById('threshold').addEventListener('input', (e) => {
       threshold = parseFloat(e.target.value);
-      thresholdVal.innerText = threshold.toFixed(1);
+      document.getElementById('thresholdVal').innerText = threshold.toFixed(1);
     });
 
-    intervalInput.addEventListener('input', (e) => {
+    document.getElementById('interval').addEventListener('input', (e) => {
       minInterval = parseInt(e.target.value);
-      intervalVal.innerText = minInterval;
+      document.getElementById('intervalVal').innerText = minInterval;
     });
 
-    lapBtn.addEventListener('click', () => {
+    document.getElementById('lapBtn').addEventListener('click', () => {
       lapTimeSeconds = 0;
       updateTimeDisplays();
     });
@@ -244,20 +414,20 @@
     function handleGpsPosition(pos) {
       if (!pos.coords || pos.coords.speed === null || pos.coords.speed === undefined) return;
 
-      // Vitesse fournie en m/s par le GPS -> conversion en km/h
       const speedKmH = Math.max(0, pos.coords.speed * 3.6);
       document.getElementById('speedInstDisplay').innerText = speedKmH.toFixed(1);
+      updateGauge('speedInstGauge', speedKmH, gaugeLimits.speedInst.min, gaugeLimits.speedInst.max);
 
-      // Cumul de la vitesse uniquement lors des phases actives de rame
       if (isPaddling) {
         activeSpeedSum += speedKmH;
         activeSpeedCount++;
         const avgSpeed = activeSpeedSum / activeSpeedCount;
         document.getElementById('speedAvgDisplay').innerText = avgSpeed.toFixed(1);
+        updateGauge('speedAvgGauge', avgSpeed, gaugeLimits.speedAvg.min, gaugeLimits.speedAvg.max);
       }
     }
 
-    startBtn.addEventListener('click', async () => {
+    document.getElementById('startBtn').addEventListener('click', async () => {
       if (!isRunning) {
         if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
           const permission = await DeviceMotionEvent.requestPermission();
@@ -267,10 +437,8 @@
           }
         }
 
-        // Écoute capteurs de mouvement
         window.addEventListener('devicemotion', handleMotion);
         
-        // Écoute GPS
         if ('geolocation' in navigator) {
           watchId = navigator.geolocation.watchPosition(
             handleGpsPosition, 
@@ -286,8 +454,8 @@
         }
 
         isRunning = true;
-        startBtn.innerText = 'PAUSER SESSION';
-        startBtn.style.backgroundColor = 'var(--danger-color)';
+        document.getElementById('startBtn').innerText = 'PAUSER SESSION';
+        document.getElementById('startBtn').style.backgroundColor = 'var(--danger-color)';
       } else {
         window.removeEventListener('devicemotion', handleMotion);
         if (watchId !== null) {
@@ -298,8 +466,8 @@
         if (wakeLock) { wakeLock.release(); wakeLock = null; }
         isRunning = false;
         isPaddling = false;
-        startBtn.innerText = 'REPRENDRE LA SESSION';
-        startBtn.style.backgroundColor = 'var(--accent-color)';
+        document.getElementById('startBtn').innerText = 'REPRENDRE LA SESSION';
+        document.getElementById('startBtn').style.backgroundColor = 'var(--accent-color)';
       }
     });
 
@@ -311,6 +479,8 @@
       const accY = Math.abs(acc.y || 0);
       const currentAcc = Math.max(accZ, accY);
 
+      updateChart(currentAcc);
+
       const currentTime = Date.now();
 
       if (currentAcc > threshold) {
@@ -320,6 +490,7 @@
           strokeCount++;
           document.getElementById('countDisplay').innerText = strokeCount;
           document.getElementById('intensityDisplay').innerText = currentAcc.toFixed(1);
+          updateGauge('intensityGauge', currentAcc, gaugeLimits.intensity.min, gaugeLimits.intensity.max);
 
           isPaddling = true;
 
@@ -327,18 +498,23 @@
           strokeTimeout = setTimeout(() => {
             isPaddling = false;
             document.getElementById('spmDisplay').innerText = '0';
+            updateGauge('spmGauge', 0, gaugeLimits.spm.min, gaugeLimits.spm.max);
             document.getElementById('speedInstDisplay').innerText = '0.0';
+            updateGauge('speedInstGauge', 0, gaugeLimits.speedInst.min, gaugeLimits.speedInst.max);
           }, 3500);
 
           if (lastStrokeTime > 0) {
             const instantSPM = Math.round(60000 / timeDiff);
             document.getElementById('spmDisplay').innerText = instantSPM;
+            updateGauge('spmGauge', instantSPM, gaugeLimits.spm.min, gaugeLimits.spm.max);
           }
 
           lastStrokeTime = currentTime;
         }
       }
     }
+
+    window.onload = initChart;
   </script>
 </body>
 </html>
