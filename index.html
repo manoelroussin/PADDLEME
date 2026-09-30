@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PADDLEME</title>
+  <title>PADDLEME - Race Edition</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
   <style>
@@ -83,7 +83,7 @@
       height: 100%;
       width: 0%;
       background: var(--number-color);
-      transition: width 0.3s ease;
+      transition: width 0.1s linear; /* Transition accélérée pour affichage réactif */
       border-radius: 3px;
     }
 
@@ -154,7 +154,6 @@
     .slider-group { margin-bottom: 8px; }
     label { display: block; margin-bottom: 2px; font-size: 0.8rem; }
     
-    /* Curseurs : couleur identique aux chiffres & valeurs */
     input[type=range] { 
       width: 100%; 
       accent-color: var(--number-color); 
@@ -166,7 +165,6 @@
       margin-bottom: 10px;
     }
 
-    /* Boutons : couleur identique au fond des cartes et texte général */
     button {
       flex: 1;
       padding: 12px;
@@ -180,7 +178,6 @@
     }
     
     .btn-modal { margin-top: 15px; padding: 10px; font-size: 0.9rem; width: 100%; }
-
     button:active { opacity: 0.8; border-color: var(--number-color); }
   </style>
 </head>
@@ -199,7 +196,7 @@
 
     <div class="card" onclick="openConfig('intensity', 'Intensité (m/s²)')">
       <div class="unit">INTENSITÉ</div>
-      <div id="intensityDisplay" class="value-small">0.0</div>
+      <div id="intensityDisplay" class="value-small">0.00</div>
       <div class="unit">m/s²</div>
       <div class="gauge-container"><div id="intensityGauge" class="gauge-bar"></div></div>
     </div>
@@ -242,7 +239,7 @@
     </div>
   </div>
 
-  <!-- Graphique avec seuil et délai -->
+  <!-- Graphique -->
   <div class="chart-container" onclick="openChartConfig()">
     <canvas id="accChart"></canvas>
   </div>
@@ -254,13 +251,13 @@
 
   <div class="controls">
     <div class="slider-group">
-      <label for="threshold">Seuil d'accélération : <b id="thresholdVal" style="color: var(--number-color);">3.0</b> m/s²</label>
-      <input type="range" id="threshold" min="1.0" max="8.0" step="0.2" value="3.0">
+      <label for="threshold">Seuil d'accélération Y : <b id="thresholdVal" style="color: var(--number-color);">0.30</b> m/s²</label>
+      <input type="range" id="threshold" min="0.05" max="2.00" step="0.05" value="0.30">
     </div>
 
     <div class="slider-group" style="margin: 0;">
-      <label for="interval">Délai min entre coups : <b id="intervalVal" style="color: var(--number-color);">800</b> ms</label>
-      <input type="range" id="interval" min="400" max="1500" step="50" value="800">
+      <label for="interval">Délai min entre coups : <b id="intervalVal" style="color: var(--number-color);">300</b> ms</label>
+      <input type="range" id="interval" min="200" max="1000" step="25" value="300">
     </div>
   </div>
 
@@ -284,9 +281,9 @@
     <div class="modal-content">
       <h3>Échelle du Graphique</h3>
       <label for="chartMaxY">Accélération Max (m/s²) :</label>
-      <input type="number" id="chartMaxY" step="1" value="10">
+      <input type="number" id="chartMaxY" step="0.5" value="3.0">
 
-      <label for="chartPoints">Points affichés (Abscisse) :</label>
+      <label for="chartPoints">Points affichés :</label>
       <input type="number" id="chartPoints" step="10" value="50">
 
       <button onclick="saveChartConfig()" class="btn-modal">Valider</button>
@@ -325,8 +322,8 @@
     let isRunning = false;
     let strokeCount = 0;
     let lastStrokeTime = 0;
-    let threshold = 3.0;
-    let minInterval = 800;
+    let threshold = 0.30;
+    let minInterval = 300; // Ajusté pour supporter les hautes cadences de sprint
     let wakeLock = null;
 
     // Horloges
@@ -344,15 +341,19 @@
     // Graphique Chart.js
     let chart;
     let maxDataPoints = 50;
-    let chartMaxY = 10;
+    let chartMaxY = 3.0;
     let refractoryPointsLeft = 0;
+
+    // Filtre axe Y
+    let yBaseline = null;
+    const alpha = 0.92;
 
     // Configuration des jauges
     const gaugeLimits = {
-      spm: { min: 30, max: 90 },
-      intensity: { min: 2, max: 8 },
-      speedInst: { min: 0, max: 15 },
-      speedAvg: { min: 0, max: 12 }
+      spm: { min: 40, max: 160 },
+      intensity: { min: 0.2, max: 2.5 },
+      speedInst: { min: 0, max: 25 },
+      speedAvg: { min: 0, max: 20 }
     };
 
     let currentConfigKey = null;
@@ -444,16 +445,16 @@
           labels: Array(maxDataPoints).fill(''),
           datasets: [
             {
-              label: 'Accélération (m/s²)',
+              label: 'Accélération Y (m/s²)',
               data: Array(maxDataPoints).fill(0),
               borderColor: '#00ffcc',
               borderWidth: 2,
               pointRadius: 0,
               fill: false,
-              tension: 0.2
+              tension: 0.1
             },
             {
-              label: 'Zone délai réfraction',
+              label: 'Délai',
               data: Array(maxDataPoints).fill(null),
               backgroundColor: 'rgba(255, 77, 77, 0.25)',
               borderWidth: 0,
@@ -521,7 +522,7 @@
 
     document.getElementById('threshold').addEventListener('input', (e) => {
       threshold = parseFloat(e.target.value);
-      document.getElementById('thresholdVal').innerText = threshold.toFixed(1);
+      document.getElementById('thresholdVal').innerText = threshold.toFixed(2);
       if (chart && chart.options.plugins.annotation) {
         chart.options.plugins.annotation.annotations.thresholdLine.yMin = threshold;
         chart.options.plugins.annotation.annotations.thresholdLine.yMax = threshold;
@@ -569,10 +570,13 @@
       }
     }
 
+    // Gestion instantanée des données GPS
     function handleGpsPosition(pos) {
       if (!pos.coords || pos.coords.speed === null || pos.coords.speed === undefined) return;
 
       const speedKmH = Math.max(0, pos.coords.speed * 3.6);
+      
+      // Mise à jour directe du DOM
       document.getElementById('speedInstDisplay').innerText = speedKmH.toFixed(1);
       updateGauge('speedInstGauge', speedKmH, gaugeLimits.speedInst.min, gaugeLimits.speedInst.max);
 
@@ -598,11 +602,16 @@
 
         window.addEventListener('devicemotion', handleMotion);
         
+        // Configuration GPS à fréquence maximale (maximumAge: 0 et timeout court)
         if ('geolocation' in navigator) {
           watchId = navigator.geolocation.watchPosition(
             handleGpsPosition, 
             (err) => console.log(err), 
-            { enableHighAccuracy: true, maximumAge: 1000 }
+            { 
+              enableHighAccuracy: true, 
+              maximumAge: 0, 
+              timeout: 2000 
+            }
           );
         }
 
@@ -632,42 +641,50 @@
       }
     });
 
+    // Détection ultra-réactive des coups et calcul de SPM instantané
     function handleMotion(event) {
-      const acc = event.acceleration || event.accelerationIncludingGravity;
-      if (!acc) return;
+      const acc = event.accelerationIncludingGravity;
+      if (!acc || acc.y === null) return;
 
-      const currentAcc = Math.abs(acc.y || 0);
-      updateChart(currentAcc);
+      const rawY = acc.y;
+
+      if (yBaseline === null) {
+        yBaseline = rawY;
+      }
+
+      yBaseline = alpha * yBaseline + (1 - alpha) * rawY;
+      const yForwardAcc = Math.abs(rawY - yBaseline);
+
+      updateChart(yForwardAcc);
 
       const currentTime = Date.now();
 
-      if (currentAcc > threshold) {
+      if (yForwardAcc > threshold) {
         const timeDiff = currentTime - lastStrokeTime;
 
         if (timeDiff > minInterval) {
           strokeCount++;
           document.getElementById('countDisplay').innerText = strokeCount;
-          document.getElementById('intensityDisplay').innerText = currentAcc.toFixed(1);
-          updateGauge('intensityGauge', currentAcc, gaugeLimits.intensity.min, gaugeLimits.intensity.max);
+          document.getElementById('intensityDisplay').innerText = yForwardAcc.toFixed(2);
+          updateGauge('intensityGauge', yForwardAcc, gaugeLimits.intensity.min, gaugeLimits.intensity.max);
 
-          refractoryPointsLeft = Math.round(minInterval / 50);
-
-          isPaddling = true;
-
-          clearTimeout(strokeTimeout);
-          strokeTimeout = setTimeout(() => {
-            isPaddling = false;
-            document.getElementById('spmDisplay').innerText = '0';
-            updateGauge('spmGauge', 0, gaugeLimits.spm.min, gaugeLimits.spm.max);
-            document.getElementById('speedInstDisplay').innerText = '0.0';
-            updateGauge('speedInstGauge', 0, gaugeLimits.speedInst.min, gaugeLimits.speedInst.max);
-          }, 3500);
-
+          // Calcul immédiat du SPM dès le 2ème coup
           if (lastStrokeTime > 0) {
             const instantSPM = Math.round(60000 / timeDiff);
             document.getElementById('spmDisplay').innerText = instantSPM;
             updateGauge('spmGauge', instantSPM, gaugeLimits.spm.min, gaugeLimits.spm.max);
           }
+
+          refractoryPointsLeft = Math.round(minInterval / 50);
+          isPaddling = true;
+
+          // Détection d'arrêt de pagement raccourcie à 2,2 secondes (adaptée aux pauses en course)
+          clearTimeout(strokeTimeout);
+          strokeTimeout = setTimeout(() => {
+            isPaddling = false;
+            document.getElementById('spmDisplay').innerText = '0';
+            updateGauge('spmGauge', 0, gaugeLimits.spm.min, gaugeLimits.spm.max);
+          }, 2200);
 
           lastStrokeTime = currentTime;
         }
