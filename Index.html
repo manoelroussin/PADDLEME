@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PADDLEME - Race Edition</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+:root {
+--bg-color: #0d1117;
+--card-bg: #161b22;
+--text-color: #f0f6fc;
+--number-color: #00ffcc;
+--danger-color: #ff4d4d;
+}
+body {
+margin: 0;
+padding: 10px;
+background-color: var(--bg-color);
+color: var(--text-color);
+font-family: system-ui, -apple-system, sans-serif;
+text-align: center;
+user-select: none;
+}
+h1 { margin: 5px 0 10px; color: var(--number-color); letter-spacing: 2px; font-size: 1.4rem; }
+
+.grid-3 {
+display: grid;
+grid-template-columns: 1fr 1fr 1fr;
+gap: 8px;
+margin-bottom: 8px;
+}
+
+.grid-2 {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 8px;
+margin-bottom: 8px;
+}
+
+.card {
+background-color: var(--card-bg);
+border-radius: 10px;
+padding: 8px 5px;
+border: 1px solid #30363d;
+position: relative;
+overflow: hidden;
+cursor: pointer;
+}
+
+.card:active {
+border-color: var(--number-color);
+}
+
+.value-small {
+font-size: 1.7rem;
+font-weight: bold;
+color: var(--number-color);
+line-height: 1.1;
+}
+
+.value-time {
+font-size: 1.5rem;
+font-weight: bold;
+color: var(--number-color);
+line-height: 1.2;
+font-family: monospace;
+}
+
+.unit { font-size: 0.72rem; color: var(--text-color); opacity: 0.8; font-weight: 600; }
+
+.gauge-container {
+width: 100%;
+height: 6px;
+background-color: #21262d;
+border-radius: 3px;
+margin-top: 6px;
+overflow: hidden;
+}
+
+.gauge-bar {
+height: 100%;
+width: 0%;
+background: var(--number-color);
+transition: width 0.08s linear;
+border-radius: 3px;
+}
+
+/* Modales */
+.modal {
+display: none;
+position: fixed;
+top: 0; left: 0; width: 100%; height: 100%;
+background: rgba(0, 0, 0, 0.85);
+justify-content: center;
+align-items: center;
+z-index: 1000;
+}
+
+.modal-content {
+background: var(--card-bg);
+padding: 20px;
+border-radius: 12px;
+border: 1px solid #30363d;
+width: 85%;
+max-width: 320px;
+text-align: left;
+color: var(--text-color);
+}
+
+.modal-content h3 { margin-top: 0; color: var(--number-color); font-size: 1.1rem; }
+.modal-content label { display: block; margin: 10px 0 4px; font-size: 0.85rem; }
+.modal-content input[type=number], .modal-content input[type=color] {
+width: 100%;
+padding: 6px;
+background: #0d1117;
+border: 1px solid #30363d;
+color: var(--text-color);
+border-radius: 6px;
+box-sizing: border-box;
+}
+
+.color-picker-group {
+display: flex;
+align-items: center;
+justify-content: space-between;
+margin-bottom: 8px;
+}
+
+.color-picker-group label { margin: 0; }
+.color-picker-group input[type=color] { width: 50px; height: 35px; padding: 2px; cursor: pointer; }
+
+.chart-container {
+background-color: var(--card-bg);
+border-radius: 10px;
+padding: 8px;
+border: 1px solid #30363d;
+margin-bottom: 8px;
+height: 140px;
+position: relative;
+cursor: pointer;
+}
+
+.controls {
+background-color: var(--card-bg);
+border-radius: 10px;
+padding: 10px;
+border: 1px solid #30363d;
+margin-bottom: 10px;
+text-align: left;
+}
+
+.slider-group { margin-bottom: 8px; }
+label { display: block; margin-bottom: 2px; font-size: 0.8rem; }
+
+input[type=range] {
+width: 100%;
+accent-color: var(--number-color);
+}
+
+.btn-group {
+display: flex;
+gap: 8px;
+margin-bottom: 10px;
+}
+
+button {
+flex: 1;
+padding: 12px;
+font-size: 0.95rem;
+font-weight: bold;
+background-color: var(--card-bg);
+color: var(--text-color);
+border: 1px solid #30363d;
+border-radius: 8px;
+cursor: pointer;
+}
+
+.btn-modal { margin-top: 15px; padding: 10px; font-size: 0.9rem; width: 100%; }
+button:active { opacity: 0.8; border-color: var(--number-color); }
+</style>
+</head>
+<body>
+
+<h1>PADDLEME</h1>
+
+<!-- Top métriques -->
+<div class="grid-3">
+<div class="card" onclick="openConfig('spm', 'Cadence (SPM)')">
+<div class="unit">CADENCE</div>
+<div id="spmDisplay" class="value-small">0</div>
+<div class="unit">SPM</div>
+<div class="gauge-container"><div id="spmGauge" class="gauge-bar"></div></div>
+</div>
+
+<div class="card" onclick="openConfig('intensity', 'Intensité Y (m/s²)')">
+<div class="unit">INTENSITÉ</div>
+<div id="intensityDisplay" class="value-small">0.00</div>
+<div class="unit">m/s²</div>
+<div class="gauge-container"><div id="intensityGauge" class="gauge-bar"></div></div>
+</div>
+
+<div class="card" style="cursor: default;">
+<div class="unit">COUPS</div>
+<div id="countDisplay" class="value-small">0</div>
+<div class="unit">total</div>
+</div>
+</div>
+
+<!-- Vitesses GPS -->
+<div class="grid-2">
+<div class="card" onclick="openConfig('speedInst', 'Vitesse Inst. (km/h)')">
+<div class="unit">VITESSE INST.</div>
+<div id="speedInstDisplay" class="value-small">0.0</div>
+<div class="unit">km/h</div>
+<div class="gauge-container"><div id="speedInstGauge" class="gauge-bar"></div></div>
+</div>
+
+<div class="card" onclick="openConfig('speedAvg', 'Vit. Moyenne (km/h)')">
+<div class="unit">VIT. MOY. (ACTIF)</div>
+<div id="speedAvgDisplay" class="value-small">0.0</div>
+<div class="unit">km/h</div>
+<div class="gauge-container"><div id="speedAvgGauge" class="gauge-bar"></div></div>
+</div>
+</div>
+
+<!-- Chronos -->
+<div class="grid-2">
+<div class="card" style="cursor: default;">
+<div class="unit">TEMPS ACTIF</div>
+<div id="activeTimeDisplay" class="value-time">00:00</div>
+<div class="unit">sans pauses</div>
+</div>
+<div class="card" style="cursor: default;">
+<div class="unit">CHRONO LAP</div>
+<div id="lapTimeDisplay" class="value-time">00:00</div>
+<div class="unit">temps total tour</div>
+</div>
+</div>
+
+<!-- Graphique -->
+<div class="chart-container" onclick="openChartConfig()">
+<canvas id="accChart"></canvas>
+</div>
+
+<div class="btn-group">
+<button id="lapBtn">Nouveau LAP</button>
+<button onclick="openThemeModal()">Thème & Couleurs</button>
+</div>
+
+<div class="controls">
+<div class="slider-group">
+<label for="threshold">Seuil d'accélération Y : <b id="thresholdVal" style="color: var(--number-color);">0.30</b> m/s²</label>
+<input type="range" id="threshold" min="0.05" max="2.00" step="0.05" value="0.30">
+</div>
+
+<div class="slider-group" style="margin: 0;">
+<label for="interval">Délai min entre coups : <b id="intervalVal" style="color: var(--number-color);">300</b> ms</label>
+<input type="range" id="interval" min="200" max="1000" step="25" value="300">
+</div>
+</div>
+
+<button id="startBtn">DÉMARRER LA SESSION</button>
+
+<!-- Modales -->
+<div id="configModal" class="modal">
+<div class="modal-content">
+<h3 id="modalTitle">Réglage Jauge</h3>
+<label for="minVal">Valeur Minimum :</label>
+<input type="number" id="minVal" step="0.1">
+
+<label for="maxVal">Valeur Maximum :</label>
+<input type="number" id="maxVal" step="0.1">
+
+<button onclick="saveConfig()" class="btn-modal">Valider</button>
+</div>
+</div>
+
+<div id="chartModal" class="modal">
+<div class="modal-content">
+<h3>Échelle du Graphique</h3>
+<label for="chartMaxY">Accélération Max (m/s²) :</label>
+<input type="number" id="chartMaxY" step="0.5" value="3.0">
+
+<label for="chartPoints">Points affichés :</label>
+<input type="number" id="chartPoints" step="10" value="50">
+
+<button onclick="saveChartConfig()" class="btn-modal">Valider</button>
+</div>
+</div>
+
+<div id="themeModal" class="modal">
+<div class="modal-content">
+<h3>Personnaliser les Couleurs</h3>
+
+<div class="color-picker-group">
+<label for="pickerBg">Fond de page :</label>
+<input type="color" id="pickerBg" value="#0d1117">
+</div>
+
+<div class="color-picker-group">
+<label for="pickerCard">Fond des cartes & boutons :</label>
+<input type="color" id="pickerCard" value="#161b22">
+</div>
+
+<div class="color-picker-group">
+<label for="pickerText">Texte général & boutons :</label>
+<input type="color" id="pickerText" value="#f0f6fc">
+</div>
+
+<div class="color-picker-group">
+<label for="pickerNumber">Chiffres, jauges & curseurs :</label>
+<input type="color" id="pickerNumber" value="#00ffcc">
+</div>
+
+<button onclick="saveTheme()" class="btn-modal">Appliquer</button>
+</div>
+</div>
+
+<script>
+let isRunning = false;
+let strokeCount = 0;
+let lastStrokeTime = 0;
+let threshold = 0.30;
+let minInterval = 300;
+let wakeLock = null;
+
+// Horloges
+let activeTimeSeconds = 0;
+let lapTimeSeconds = 0;
+let activeTimer = null;
+let strokeTimeout = null;
+let isPaddling = false;
+
+// GPS & Vitesses
+let watchId = null;
+let activeSpeedSum = 0;
+let activeSpeedCount = 0;
+
+// Graphique Chart.js
+let chart;
+let maxDataPoints = 50;
+let chartMaxY = 3.0;
+
+// Filtre & Traitement du signal par pics lissés
+let yBaseline = null;
+const alphaGravity = 0.95;
+let smoothedY = 0;
+const alphaSmooth = 0.35;
+let signalHistory = [];
+
+// Configuration des jauges
+const gaugeLimits = {
+spm: { min: 40, max: 160 },
+intensity: { min: 0.1, max: 2.0 },
+speedInst: { min: 0, max: 25 },
+speedAvg: { min: 0, max: 20 }
+};
+
+let currentConfigKey = null;
+
+function openConfig(key, title) {
+currentConfigKey = key;
+document.getElementById('modalTitle').innerText = title;
+document.getElementById('minVal').value = gaugeLimits[key].min;
+document.getElementById('maxVal').value = gaugeLimits[key].max;
+document.getElementById('configModal').style.display = 'flex';
+}
+
+function saveConfig() {
+if (currentConfigKey) {
+const min = parseFloat(document.getElementById('minVal').value);
+const max = parseFloat(document.getElementById('maxVal').value);
+
+if (!isNaN(min) && !isNaN(max) && max > min) {
+gaugeLimits[currentConfigKey].min = min;
+gaugeLimits[currentConfigKey].max = max;
+}
+}
+document.getElementById('configModal').style.display = 'none';
+}
+
+function openChartConfig() {
+document.getElementById('chartMaxY').value = chartMaxY;
+document.getElementById('chartPoints').value = maxDataPoints;
+document.getElementById('chartModal').style.display = 'flex';
+}
+
+function saveChartConfig() {
+const maxY = parseFloat(document.getElementById('chartMaxY').value);
+const points = parseInt(document.getElementById('chartPoints').value);
+
+if (!isNaN(maxY) && maxY > 0) {
+chartMaxY = maxY;
+chart.options.scales.y.max = chartMaxY;
+}
+
+if (!isNaN(points) && points > 5) {
+maxDataPoints = points;
+const currentData = chart.data.datasets[0].data;
+if (currentData.length < maxDataPoints) {
+while (currentData.length < maxDataPoints) currentData.unshift(0);
+} else if (currentData.length > maxDataPoints) {
+chart.data.datasets[0].data = currentData.slice(-maxDataPoints);
+}
+chart.data.labels = Array(maxDataPoints).fill('');
+}
+
+chart.update();
+document.getElementById('chartModal').style.display = 'none';
+}
+
+function openThemeModal() {
+document.getElementById('themeModal').style.display = 'flex';
+}
+
+function saveTheme() {
+const bg = document.getElementById('pickerBg').value;
+const card = document.getElementById('pickerCard').value;
+const text = document.getElementById('pickerText').value;
+const number = document.getElementById('pickerNumber').value;
+
+document.documentElement.style.setProperty('--bg-color', bg);
+document.documentElement.style.setProperty('--card-bg', card);
+document.documentElement.style.setProperty('--text-color', text);
+document.documentElement.style.setProperty('--number-color', number);
+
+if (chart) {
+chart.data.datasets[0].borderColor = number;
+chart.update();
+}
+
+document.getElementById('themeModal').style.display = 'none';
+}
+
+function updateGauge(gaugeId, value, min, max) {
+const percentage = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
+document.getElementById(gaugeId).style.width = percentage + '%';
+}
+
+function initChart() {
+const ctx = document.getElementById('accChart').getContext('2d');
+chart = new Chart(ctx, {
+type: 'line',
+data: {
+labels: Array(maxDataPoints).fill(''),
+datasets: [
+{
+label: 'Accélération lissée (m/s²)',
+data: Array(maxDataPoints).fill(0),
+borderColor: '#00ffcc',
+borderWidth: 2,
+pointRadius: 0,
+fill: false,
+tension: 0.2
+}
+ ]
+},
+options: {
+responsive: true,
+maintainAspectRatio: false,
+animation: false,
+scales: {
+x: { display: false },
+y: {
+min: 0,
+max: chartMaxY,
+grid: { color: '#30363d' },
+ticks: { color: '#8b949e', font: { size: 9 } }
+}
+},
+plugins: {
+legend: { display: false },
+annotation: {
+annotations: {
+thresholdLine: {
+type: 'line',
+yMin: threshold,
+yMax: threshold,
+borderColor: '#ff4d4d',
+borderWidth: 1.5,
+borderDash: [4, 4],
+label: {
+display: true,
+content: 'Seuil',
+position: 'end',
+color: '#ff4d4d',
+font: { size: 9 },
+backgroundColor: 'transparent'
+}
+}
+}
+}
+}
+}
+});
+}
+
+function updateChart(value) {
+if (!chart) return;
+
+chart.data.datasets[0].data.push(value);
+chart.data.datasets[0].data.shift();
+
+chart.update('none');
+}
+
+document.getElementById('threshold').addEventListener('input', (e) => {
+threshold = parseFloat(e.target.value);
+document.getElementById('thresholdVal').innerText = threshold.toFixed(2);
+if (chart && chart.options.plugins.annotation) {
+chart.options.plugins.annotation.annotations.thresholdLine.yMin = threshold;
+chart.options.plugins.annotation.annotations.thresholdLine.yMax = threshold;
+chart.update('none');
+}
+});
+
+document.getElementById('interval').addEventListener('input', (e) => {
+minInterval = parseInt(e.target.value);
+document.getElementById('intervalVal').innerText = minInterval;
+});
+
+document.getElementById('lapBtn').addEventListener('click', () => {
+lapTimeSeconds = 0;
+updateTimeDisplays();
+});
+
+function formatTime(sec) {
+const m = Math.floor(sec / 60).toString().padStart(2, '0');
+const s = (sec % 60).toString().padStart(2, '0');
+return ${m}:${s};
+}
+
+function updateTimeDisplays() {
+document.getElementById('activeTimeDisplay').innerText = formatTime(activeTimeSeconds);
+document.getElementById('lapTimeDisplay').innerText = formatTime(lapTimeSeconds);
+}
+
+function startActiveTimer() {
+if (!activeTimer) {
+activeTimer = setInterval(() => {
+lapTimeSeconds++;
+if (isPaddling) {
+activeTimeSeconds++;
+}
+updateTimeDisplays();
+}, 1000);
+}
+}
+
+function stopActiveTimer() {
+if (activeTimer) {
+clearInterval(activeTimer);
+activeTimer = null;
+}
+}
+
+function handleGpsPosition(pos) {
+if (!pos.coords || pos.coords.speed === null || pos.coords.speed === undefined) return;
+
+const speedKmH = Math.max(0, pos.coords.speed * 3.6);
+
+document.getElementById('speedInstDisplay').innerText = speedKmH.toFixed(1);
+updateGauge('speedInstGauge', speedKmH, gaugeLimits.speedInst.min, gaugeLimits.speedInst.max);
+
+if (isPaddling) {
+activeSpeedSum += speedKmH;
+activeSpeedCount++;
+const avgSpeed = activeSpeedSum / activeSpeedCount;
+document.getElementById('speedAvgDisplay').innerText = avgSpeed.toFixed(1);
+updateGauge('speedAvgGauge', avgSpeed, gaugeLimits.speedAvg.min, gaugeLimits.speedAvg.max);
+}
+}
+
+document.getElementById('startBtn').addEventListener('click', async () => {
+const startBtn = document.getElementById('startBtn');
+if (!isRunning) {
+if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+const permission = await DeviceMotionEvent.requestPermission();
+if (permission !== 'granted') {
+alert('Accès aux capteurs refusé');
+return;
+}
+}
+
+window.addEventListener('devicemotion', handleMotion);
+
+if ('geolocation' in navigator) {
+watchId = navigator.geolocation.watchPosition(
+handleGpsPosition,
+(err) => console.log(err),
+{
+enableHighAccuracy: true,
+maximumAge: 0,
+timeout: 2000
+}
+);
+}
+
+startActiveTimer();
+
+if ('wakeLock' in navigator) {
+try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+}
+
+isRunning = true;
+startBtn.innerText = 'PAUSER SESSION';
+startBtn.style.backgroundColor = 'var(--danger-color)';
+startBtn.style.color = '#ffffff';
+} else {
+window.removeEventListener('devicemotion', handleMotion);
+if (watchId !== null) {
+navigator.geolocation.clearWatch(watchId);
+watchId = null;
+}
+stopActiveTimer();
+if (wakeLock) { wakeLock.release(); wakeLock = null; }
+isRunning = false;
+isPaddling = false;
+startBtn.innerText = 'REPRENDRE LA SESSION';
+startBtn.style.backgroundColor = 'var(--card-bg)';
+startBtn.style.color = 'var(--text-color)';
+}
+});
+
+// Nouvelle méthode de traitement du signal par pics lissés
+function handleMotion(event) {
+const acc = event.accelerationIncludingGravity;
+if (!acc || acc.y === null) return;
+
+const rawY = acc.y;
+
+if (yBaseline === null) yBaseline = rawY;
+yBaseline = alphaGravity * yBaseline + (1 - alphaGravity) * rawY;
+const rawForwardAcc = Math.abs(rawY - yBaseline);
+
+smoothedY = alphaSmooth * smoothedY + (1 - alphaSmooth) * rawForwardAcc;
+updateChart(smoothedY);
+
+signalHistory.push(smoothedY);
+if (signalHistory.length > 3) signalHistory.shift();
+
+if (signalHistory.length === 3) {
+const prev = signalHistory[0];
+const curr = signalHist
