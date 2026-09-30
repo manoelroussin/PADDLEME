@@ -10,11 +10,7 @@
     :root {
       --bg-color: #0d1117;
       --card-bg: #161b22;
-      --accent-color: #00ffcc;
       --text-color: #f0f6fc;
-      --subtext-color: #8b949e;
-      --btn-color: #00ffcc;
-      --btn-text-color: #000000;
       --number-color: #00ffcc;
       --danger-color: #ff4d4d;
     }
@@ -54,7 +50,7 @@
     }
 
     .card:active {
-      border-color: var(--accent-color);
+      border-color: var(--number-color);
     }
     
     .value-small {
@@ -86,7 +82,7 @@
     .gauge-bar {
       height: 100%;
       width: 0%;
-      background: var(--btn-color);
+      background: var(--number-color);
       transition: width 0.3s ease;
       border-radius: 3px;
     }
@@ -157,7 +153,12 @@
     
     .slider-group { margin-bottom: 8px; }
     label { display: block; margin-bottom: 2px; font-size: 0.8rem; }
-    input[type=range] { width: 100%; accent-color: var(--btn-color); }
+    
+    /* Curseurs : couleur identique aux chiffres & valeurs */
+    input[type=range] { 
+      width: 100%; 
+      accent-color: var(--number-color); 
+    }
     
     .btn-group {
       display: flex;
@@ -165,23 +166,22 @@
       margin-bottom: 10px;
     }
 
+    /* Boutons : couleur identique au fond des cartes et texte général */
     button {
       flex: 1;
       padding: 12px;
       font-size: 0.95rem;
       font-weight: bold;
-      background-color: var(--btn-color);
-      color: var(--btn-text-color);
-      border: none;
+      background-color: var(--card-bg);
+      color: var(--text-color);
+      border: 1px solid #30363d;
       border-radius: 8px;
       cursor: pointer;
     }
     
-    .btn-theme { background-color: #388bfd; color: #fff; }
-    .btn-lap { background-color: #238636; color: #fff; }
     .btn-modal { margin-top: 15px; padding: 10px; font-size: 0.9rem; width: 100%; }
 
-    button:active { opacity: 0.8; }
+    button:active { opacity: 0.8; border-color: var(--number-color); }
   </style>
 </head>
 <body>
@@ -248,18 +248,18 @@
   </div>
 
   <div class="btn-group">
-    <button id="lapBtn" class="btn-lap">Nouveau LAP</button>
-    <button onclick="openThemeModal()" class="btn-theme">Thème & Couleurs</button>
+    <button id="lapBtn">Nouveau LAP</button>
+    <button onclick="openThemeModal()">Thème & Couleurs</button>
   </div>
 
   <div class="controls">
     <div class="slider-group">
-      <label for="threshold">Seuil d'accélération : <b id="thresholdVal">3.0</b> m/s²</label>
+      <label for="threshold">Seuil d'accélération : <b id="thresholdVal" style="color: var(--number-color);">3.0</b> m/s²</label>
       <input type="range" id="threshold" min="1.0" max="8.0" step="0.2" value="3.0">
     </div>
 
     <div class="slider-group" style="margin: 0;">
-      <label for="interval">Délai min entre coups : <b id="intervalVal">800</b> ms</label>
+      <label for="interval">Délai min entre coups : <b id="intervalVal" style="color: var(--number-color);">800</b> ms</label>
       <input type="range" id="interval" min="400" max="1500" step="50" value="800">
     </div>
   </div>
@@ -303,23 +303,18 @@
       </div>
 
       <div class="color-picker-group">
-        <label for="pickerCard">Fond des cartes :</label>
+        <label for="pickerCard">Fond des cartes & boutons :</label>
         <input type="color" id="pickerCard" value="#161b22">
       </div>
 
       <div class="color-picker-group">
-        <label for="pickerText">Texte général :</label>
+        <label for="pickerText">Texte général & boutons :</label>
         <input type="color" id="pickerText" value="#f0f6fc">
       </div>
 
       <div class="color-picker-group">
-        <label for="pickerNumber">Chiffres & Valeurs :</label>
+        <label for="pickerNumber">Chiffres, jauges & curseurs :</label>
         <input type="color" id="pickerNumber" value="#00ffcc">
-      </div>
-
-      <div class="color-picker-group">
-        <label for="pickerBtn">Boutons & Jauges :</label>
-        <input type="color" id="pickerBtn" value="#00ffcc">
       </div>
 
       <button onclick="saveTheme()" class="btn-modal">Appliquer</button>
@@ -422,13 +417,11 @@
       const card = document.getElementById('pickerCard').value;
       const text = document.getElementById('pickerText').value;
       const number = document.getElementById('pickerNumber').value;
-      const btn = document.getElementById('pickerBtn').value;
 
       document.documentElement.style.setProperty('--bg-color', bg);
       document.documentElement.style.setProperty('--card-bg', card);
       document.documentElement.style.setProperty('--text-color', text);
       document.documentElement.style.setProperty('--number-color', number);
-      document.documentElement.style.setProperty('--btn-color', btn);
 
       if (chart) {
         chart.data.datasets[0].borderColor = number;
@@ -593,6 +586,7 @@
     }
 
     document.getElementById('startBtn').addEventListener('click', async () => {
+      const startBtn = document.getElementById('startBtn');
       if (!isRunning) {
         if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
           const permission = await DeviceMotionEvent.requestPermission();
@@ -619,8 +613,9 @@
         }
 
         isRunning = true;
-        document.getElementById('startBtn').innerText = 'PAUSER SESSION';
-        document.getElementById('startBtn').style.backgroundColor = 'var(--danger-color)';
+        startBtn.innerText = 'PAUSER SESSION';
+        startBtn.style.backgroundColor = 'var(--danger-color)';
+        startBtn.style.color = '#ffffff';
       } else {
         window.removeEventListener('devicemotion', handleMotion);
         if (watchId !== null) {
@@ -631,8 +626,9 @@
         if (wakeLock) { wakeLock.release(); wakeLock = null; }
         isRunning = false;
         isPaddling = false;
-        document.getElementById('startBtn').innerText = 'REPRENDRE LA SESSION';
-        document.getElementById('startBtn').style.backgroundColor = 'var(--btn-color)';
+        startBtn.innerText = 'REPRENDRE LA SESSION';
+        startBtn.style.backgroundColor = 'var(--card-bg)';
+        startBtn.style.color = 'var(--text-color)';
       }
     });
 
@@ -654,7 +650,6 @@
           document.getElementById('intensityDisplay').innerText = currentAcc.toFixed(1);
           updateGauge('intensityGauge', currentAcc, gaugeLimits.intensity.min, gaugeLimits.intensity.max);
 
-          // Active la bande du délai réfraction sur le graphique (estimée à ~50ms par échantillon)
           refractoryPointsLeft = Math.round(minInterval / 50);
 
           isPaddling = true;
