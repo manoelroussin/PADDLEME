@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PADDLEME</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
   <style>
     :root {
       --bg-color: #0d1117;
@@ -12,6 +13,9 @@
       --accent-color: #00ffcc;
       --text-color: #f0f6fc;
       --subtext-color: #8b949e;
+      --btn-color: #00ffcc;
+      --btn-text-color: #000000;
+      --number-color: #00ffcc;
       --danger-color: #ff4d4d;
     }
     body {
@@ -23,9 +27,8 @@
       text-align: center;
       user-select: none;
     }
-    h1 { margin: 5px 0 10px; color: var(--accent-color); letter-spacing: 2px; font-size: 1.4rem; }
+    h1 { margin: 5px 0 10px; color: var(--number-color); letter-spacing: 2px; font-size: 1.4rem; }
     
-    /* Grilles compactes */
     .grid-3 {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -57,21 +60,20 @@
     .value-small {
       font-size: 1.7rem;
       font-weight: bold;
-      color: var(--accent-color);
+      color: var(--number-color);
       line-height: 1.1;
     }
     
     .value-time {
       font-size: 1.5rem;
       font-weight: bold;
-      color: #fff;
+      color: var(--number-color);
       line-height: 1.2;
       font-family: monospace;
     }
 
-    .unit { font-size: 0.72rem; color: var(--subtext-color); font-weight: 600; }
+    .unit { font-size: 0.72rem; color: var(--text-color); opacity: 0.8; font-weight: 600; }
     
-    /* Jauges sous les cartes */
     .gauge-container {
       width: 100%;
       height: 6px;
@@ -84,17 +86,17 @@
     .gauge-bar {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #00ffcc, #ffab00, #ff4d4d);
+      background: var(--btn-color);
       transition: width 0.3s ease;
       border-radius: 3px;
     }
 
-    /* Modale de réglage Min/Max */
+    /* Modales */
     .modal {
       display: none;
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.85);
       justify-content: center;
       align-items: center;
       z-index: 1000;
@@ -105,32 +107,43 @@
       padding: 20px;
       border-radius: 12px;
       border: 1px solid #30363d;
-      width: 80%;
-      max-width: 300px;
+      width: 85%;
+      max-width: 320px;
       text-align: left;
+      color: var(--text-color);
     }
 
-    .modal-content h3 { margin-top: 0; color: var(--accent-color); font-size: 1.1rem; }
-    .modal-content label { display: block; margin: 10px 0 4px; font-size: 0.9rem; }
-    .modal-content input[type=number] {
+    .modal-content h3 { margin-top: 0; color: var(--number-color); font-size: 1.1rem; }
+    .modal-content label { display: block; margin: 10px 0 4px; font-size: 0.85rem; }
+    .modal-content input[type=number], .modal-content input[type=color] {
       width: 100%;
-      padding: 8px;
+      padding: 6px;
       background: #0d1117;
       border: 1px solid #30363d;
-      color: #fff;
+      color: var(--text-color);
       border-radius: 6px;
       box-sizing: border-box;
     }
 
-    /* Container du graphique */
+    .color-picker-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .color-picker-group label { margin: 0; }
+    .color-picker-group input[type=color] { width: 50px; height: 35px; padding: 2px; cursor: pointer; }
+
     .chart-container {
       background-color: var(--card-bg);
       border-radius: 10px;
       padding: 8px;
       border: 1px solid #30363d;
       margin-bottom: 8px;
-      height: 130px;
+      height: 140px;
       position: relative;
+      cursor: pointer;
     }
     
     .controls {
@@ -144,7 +157,7 @@
     
     .slider-group { margin-bottom: 8px; }
     label { display: block; margin-bottom: 2px; font-size: 0.8rem; }
-    input[type=range] { width: 100%; accent-color: var(--accent-color); }
+    input[type=range] { width: 100%; accent-color: var(--btn-color); }
     
     .btn-group {
       display: flex;
@@ -155,17 +168,18 @@
     button {
       flex: 1;
       padding: 12px;
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: bold;
-      background-color: var(--accent-color);
-      color: #000;
+      background-color: var(--btn-color);
+      color: var(--btn-text-color);
       border: none;
       border-radius: 8px;
       cursor: pointer;
     }
     
-    .btn-lap { background-color: #388bfd; color: #fff; }
-    .btn-modal { margin-top: 15px; padding: 10px; font-size: 0.9rem; }
+    .btn-theme { background-color: #388bfd; color: #fff; }
+    .btn-lap { background-color: #238636; color: #fff; }
+    .btn-modal { margin-top: 15px; padding: 10px; font-size: 0.9rem; width: 100%; }
 
     button:active { opacity: 0.8; }
   </style>
@@ -174,7 +188,7 @@
 
   <h1>PADDLEME</h1>
 
-  <!-- Top métriques : Cadence, Intensité, Coups -->
+  <!-- Top métriques -->
   <div class="grid-3">
     <div class="card" onclick="openConfig('spm', 'Cadence (SPM)')">
       <div class="unit">CADENCE</div>
@@ -224,17 +238,18 @@
     <div class="card" style="cursor: default;">
       <div class="unit">CHRONO LAP</div>
       <div id="lapTimeDisplay" class="value-time">00:00</div>
-      <div class="unit">tour en cours</div>
+      <div class="unit">temps total tour</div>
     </div>
   </div>
 
-  <!-- Graphique d'accélération en direct -->
-  <div class="chart-container">
+  <!-- Graphique avec seuil et délai -->
+  <div class="chart-container" onclick="openChartConfig()">
     <canvas id="accChart"></canvas>
   </div>
 
   <div class="btn-group">
-    <button id="lapBtn" class="btn-lap">Nouveau LAP (Reset)</button>
+    <button id="lapBtn" class="btn-lap">Nouveau LAP</button>
+    <button onclick="openThemeModal()" class="btn-theme">Thème & Couleurs</button>
   </div>
 
   <div class="controls">
@@ -251,7 +266,7 @@
 
   <button id="startBtn">DÉMARRER LA SESSION</button>
 
-  <!-- Modale de réglage Min/Max -->
+  <!-- Modales -->
   <div id="configModal" class="modal">
     <div class="modal-content">
       <h3 id="modalTitle">Réglage Jauge</h3>
@@ -262,6 +277,52 @@
       <input type="number" id="maxVal" step="0.1">
 
       <button onclick="saveConfig()" class="btn-modal">Valider</button>
+    </div>
+  </div>
+
+  <div id="chartModal" class="modal">
+    <div class="modal-content">
+      <h3>Échelle du Graphique</h3>
+      <label for="chartMaxY">Accélération Max (m/s²) :</label>
+      <input type="number" id="chartMaxY" step="1" value="10">
+
+      <label for="chartPoints">Points affichés (Abscisse) :</label>
+      <input type="number" id="chartPoints" step="10" value="50">
+
+      <button onclick="saveChartConfig()" class="btn-modal">Valider</button>
+    </div>
+  </div>
+
+  <div id="themeModal" class="modal">
+    <div class="modal-content">
+      <h3>Personnaliser les Couleurs</h3>
+      
+      <div class="color-picker-group">
+        <label for="pickerBg">Fond de page :</label>
+        <input type="color" id="pickerBg" value="#0d1117">
+      </div>
+
+      <div class="color-picker-group">
+        <label for="pickerCard">Fond des cartes :</label>
+        <input type="color" id="pickerCard" value="#161b22">
+      </div>
+
+      <div class="color-picker-group">
+        <label for="pickerText">Texte général :</label>
+        <input type="color" id="pickerText" value="#f0f6fc">
+      </div>
+
+      <div class="color-picker-group">
+        <label for="pickerNumber">Chiffres & Valeurs :</label>
+        <input type="color" id="pickerNumber" value="#00ffcc">
+      </div>
+
+      <div class="color-picker-group">
+        <label for="pickerBtn">Boutons & Jauges :</label>
+        <input type="color" id="pickerBtn" value="#00ffcc">
+      </div>
+
+      <button onclick="saveTheme()" class="btn-modal">Appliquer</button>
     </div>
   </div>
 
@@ -287,9 +348,11 @@
 
     // Graphique Chart.js
     let chart;
-    const maxDataPoints = 50;
+    let maxDataPoints = 50;
+    let chartMaxY = 10;
+    let refractoryPointsLeft = 0;
 
-    // Configuration des Min/Max pour les jauges
+    // Configuration des jauges
     const gaugeLimits = {
       spm: { min: 30, max: 90 },
       intensity: { min: 2, max: 8 },
@@ -320,6 +383,61 @@
       document.getElementById('configModal').style.display = 'none';
     }
 
+    function openChartConfig() {
+      document.getElementById('chartMaxY').value = chartMaxY;
+      document.getElementById('chartPoints').value = maxDataPoints;
+      document.getElementById('chartModal').style.display = 'flex';
+    }
+
+    function saveChartConfig() {
+      const maxY = parseFloat(document.getElementById('chartMaxY').value);
+      const points = parseInt(document.getElementById('chartPoints').value);
+
+      if (!isNaN(maxY) && maxY > 0) {
+        chartMaxY = maxY;
+        chart.options.scales.y.max = chartMaxY;
+      }
+
+      if (!isNaN(points) && points > 5) {
+        maxDataPoints = points;
+        const currentData = chart.data.datasets[0].data;
+        if (currentData.length < maxDataPoints) {
+          while (currentData.length < maxDataPoints) currentData.unshift(0);
+        } else if (currentData.length > maxDataPoints) {
+          chart.data.datasets[0].data = currentData.slice(-maxDataPoints);
+        }
+        chart.data.labels = Array(maxDataPoints).fill('');
+      }
+
+      chart.update();
+      document.getElementById('chartModal').style.display = 'none';
+    }
+
+    function openThemeModal() {
+      document.getElementById('themeModal').style.display = 'flex';
+    }
+
+    function saveTheme() {
+      const bg = document.getElementById('pickerBg').value;
+      const card = document.getElementById('pickerCard').value;
+      const text = document.getElementById('pickerText').value;
+      const number = document.getElementById('pickerNumber').value;
+      const btn = document.getElementById('pickerBtn').value;
+
+      document.documentElement.style.setProperty('--bg-color', bg);
+      document.documentElement.style.setProperty('--card-bg', card);
+      document.documentElement.style.setProperty('--text-color', text);
+      document.documentElement.style.setProperty('--number-color', number);
+      document.documentElement.style.setProperty('--btn-color', btn);
+
+      if (chart) {
+        chart.data.datasets[0].borderColor = number;
+        chart.update();
+      }
+
+      document.getElementById('themeModal').style.display = 'none';
+    }
+
     function updateGauge(gaugeId, value, min, max) {
       const percentage = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
       document.getElementById(gaugeId).style.width = percentage + '%';
@@ -331,15 +449,25 @@
         type: 'line',
         data: {
           labels: Array(maxDataPoints).fill(''),
-          datasets: [{
-            label: 'Accélération (m/s²)',
-            data: Array(maxDataPoints).fill(0),
-            borderColor: '#00ffcc',
-            borderWidth: 2,
-            pointRadius: 0,
-            fill: false,
-            tension: 0.2
-          }]
+          datasets: [
+            {
+              label: 'Accélération (m/s²)',
+              data: Array(maxDataPoints).fill(0),
+              borderColor: '#00ffcc',
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.2
+            },
+            {
+              label: 'Zone délai réfraction',
+              data: Array(maxDataPoints).fill(null),
+              backgroundColor: 'rgba(255, 77, 77, 0.25)',
+              borderWidth: 0,
+              pointRadius: 0,
+              fill: 'start'
+            }
+          ]
         },
         options: {
           responsive: true,
@@ -349,26 +477,63 @@
             x: { display: false },
             y: {
               min: 0,
-              max: 10,
+              max: chartMaxY,
               grid: { color: '#30363d' },
               ticks: { color: '#8b949e', font: { size: 9 } }
             }
           },
-          plugins: { legend: { display: false } }
+          plugins: {
+            legend: { display: false },
+            annotation: {
+              annotations: {
+                thresholdLine: {
+                  type: 'line',
+                  yMin: threshold,
+                  yMax: threshold,
+                  borderColor: '#ff4d4d',
+                  borderWidth: 1.5,
+                  borderDash: [4, 4],
+                  label: {
+                    display: true,
+                    content: 'Seuil',
+                    position: 'end',
+                    color: '#ff4d4d',
+                    font: { size: 9 },
+                    backgroundColor: 'transparent'
+                  }
+                }
+              }
+            }
+          }
         }
       });
     }
 
     function updateChart(value) {
       if (!chart) return;
+
       chart.data.datasets[0].data.push(value);
       chart.data.datasets[0].data.shift();
+
+      if (refractoryPointsLeft > 0) {
+        chart.data.datasets[1].data.push(chartMaxY);
+        refractoryPointsLeft--;
+      } else {
+        chart.data.datasets[1].data.push(null);
+      }
+      chart.data.datasets[1].data.shift();
+
       chart.update('none');
     }
 
     document.getElementById('threshold').addEventListener('input', (e) => {
       threshold = parseFloat(e.target.value);
       document.getElementById('thresholdVal').innerText = threshold.toFixed(1);
+      if (chart && chart.options.plugins.annotation) {
+        chart.options.plugins.annotation.annotations.thresholdLine.yMin = threshold;
+        chart.options.plugins.annotation.annotations.thresholdLine.yMax = threshold;
+        chart.update('none');
+      }
     });
 
     document.getElementById('interval').addEventListener('input', (e) => {
@@ -395,11 +560,11 @@
     function startActiveTimer() {
       if (!activeTimer) {
         activeTimer = setInterval(() => {
+          lapTimeSeconds++;
           if (isPaddling) {
             activeTimeSeconds++;
-            lapTimeSeconds++;
-            updateTimeDisplays();
           }
+          updateTimeDisplays();
         }, 1000);
       }
     }
@@ -467,7 +632,7 @@
         isRunning = false;
         isPaddling = false;
         document.getElementById('startBtn').innerText = 'REPRENDRE LA SESSION';
-        document.getElementById('startBtn').style.backgroundColor = 'var(--accent-color)';
+        document.getElementById('startBtn').style.backgroundColor = 'var(--btn-color)';
       }
     });
 
@@ -475,10 +640,7 @@
       const acc = event.acceleration || event.accelerationIncludingGravity;
       if (!acc) return;
 
-      const accZ = Math.abs(acc.z || 0);
-      const accY = Math.abs(acc.y || 0);
-      const currentAcc = Math.max(accZ, accY);
-
+      const currentAcc = Math.abs(acc.y || 0);
       updateChart(currentAcc);
 
       const currentTime = Date.now();
@@ -491,6 +653,9 @@
           document.getElementById('countDisplay').innerText = strokeCount;
           document.getElementById('intensityDisplay').innerText = currentAcc.toFixed(1);
           updateGauge('intensityGauge', currentAcc, gaugeLimits.intensity.min, gaugeLimits.intensity.max);
+
+          // Active la bande du délai réfraction sur le graphique (estimée à ~50ms par échantillon)
+          refractoryPointsLeft = Math.round(minInterval / 50);
 
           isPaddling = true;
 
