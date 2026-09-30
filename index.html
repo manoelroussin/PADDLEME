@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PADDLEME</title>
+  <style>
+    :root {
+      --bg-color: #0d1117;
+      --card-bg: #161b22;
+      --accent-color: #00ffcc;
+      --text-color: #f0f6fc;
+      --subtext-color: #8b949e;
+      --danger-color: #ff4d4d;
+    }
+    body {
+      margin: 0;
+      padding: 10px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: system-ui, -apple-system, sans-serif;
+      text-align: center;
+    }
+    h1 { margin: 5px 0 10px; color: var(--accent-color); letter-spacing: 2px; font-size: 1.4rem; }
+    
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 10px;
+      padding: 8px 5px;
+      border: 1px solid #30363d;
+    }
+    
+    .value-small {
+      font-size: 1.7rem;
+      font-weight: bold;
+      color: var(--accent-color);
+      line-height: 1.1;
+    }
+    
+    .value-time {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #fff;
+      line-height: 1.2;
+      font-family: monospace;
+    }
+
+    .unit { font-size: 0.75rem; color: var(--subtext-color); font-weight: 600; }
+    
+    .controls {
+      background-color: var(--card-bg);
+      border-radius: 10px;
+      padding: 10px;
+      border: 1px solid #30363d;
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    
+    .slider-group { margin-bottom: 8px; }
+    label { display: block; margin-bottom: 2px; font-size: 0.8rem; }
+    input[type=range] { width: 100%; accent-color: var(--accent-color); }
+    
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      background-color: var(--accent-color);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    
+    .btn-lap {
+      background-color: #388bfd;
+      color: #fff;
+    }
+
+    button:active { opacity: 0.8; }
+  </style>
+</head>
+<body>
+
+  <h1>PADDLEME</h1>
+
+  <!-- Top métriques : Cadence, Intensité, Coups -->
+  <div class="grid-3">
+    <div class="card">
+      <div class="unit">CADENCE</div>
+      <div id="spmDisplay" class="value-small">0</div>
+      <div class="unit">SPM</div>
+    </div>
+    <div class="card">
+      <div class="unit">INTENSITÉ</div>
+      <div id="intensityDisplay" class="value-small">0.0</div>
+      <div class="unit">m/s²</div>
+    </div>
+    <div class="card">
+      <div class="unit">COUPS</div>
+      <div id="countDisplay" class="value-small">0</div>
+      <div class="unit">total</div>
+    </div>
+  </div>
+
+  <!-- Vitesses GPS : Instantanée & Moyenne active -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="unit">VITESSE INST.</div>
+      <div id="speedInstDisplay" class="value-small">0.0</div>
+      <div class="unit">km/h</div>
+    </div>
+    <div class="card">
+      <div class="unit">VIT. MOY. (ACTIF)</div>
+      <div id="speedAvgDisplay" class="value-small">0.0</div>
+      <div class="unit">km/h</div>
+    </div>
+  </div>
+
+  <!-- Chronos -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="unit">TEMPS ACTIF</div>
+      <div id="activeTimeDisplay" class="value-time">00:00</div>
+      <div class="unit">sans pauses</div>
+    </div>
+    <div class="card">
+      <div class="unit">CHRONO LAP</div>
+      <div id="lapTimeDisplay" class="value-time">00:00</div>
+      <div class="unit">tour en cours</div>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button id="lapBtn" class="btn-lap">Nouveau LAP (Reset)</button>
+  </div>
+
+  <div class="controls">
+    <div class="slider-group">
+      <label for="threshold">Seuil d'accélération : <b id="thresholdVal">3.0</b> m/s²</label>
+      <input type="range" id="threshold" min="1.0" max="8.0" step="0.2" value="3.0">
+    </div>
+
+    <div class="slider-group" style="margin: 0;">
+      <label for="interval">Délai min entre coups : <b id="intervalVal">800</b> ms</label>
+      <input type="range" id="interval" min="400" max="1500" step="50" value="800">
+    </div>
+  </div>
+
+  <button id="startBtn">DÉMARRER LA SESSION</button>
+
+  <script>
+    let isRunning = false;
+    let strokeCount = 0;
+    let lastStrokeTime = 0;
+    let threshold = 3.0;
+    let minInterval = 800;
+    let wakeLock = null;
+
+    // Gestion du temps
+    let activeTimeSeconds = 0;
+    let lapTimeSeconds = 0;
+    let activeTimer = null;
+    let strokeTimeout = null;
+    let isPaddling = false;
+
+    // GPS & Vitesses
+    let watchId = null;
+    let activeSpeedSum = 0;
+    let activeSpeedCount = 0;
+
+    const thresholdInput = document.getElementById('threshold');
+    const thresholdVal = document.getElementById('thresholdVal');
+    const intervalInput = document.getElementById('interval');
+    const intervalVal = document.getElementById('intervalVal');
+    const startBtn = document.getElementById('startBtn');
+    const lapBtn = document.getElementById('lapBtn');
+
+    thresholdInput.addEventListener('input', (e) => {
+      threshold = parseFloat(e.target.value);
+      thresholdVal.innerText = threshold.toFixed(1);
+    });
+
+    intervalInput.addEventListener('input', (e) => {
+      minInterval = parseInt(e.target.value);
+      intervalVal.innerText = minInterval;
+    });
+
+    lapBtn.addEventListener('click', () => {
+      lapTimeSeconds = 0;
+      updateTimeDisplays();
+    });
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      const s = (sec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateTimeDisplays() {
+      document.getElementById('activeTimeDisplay').innerText = formatTime(activeTimeSeconds);
+      document.getElementById('lapTimeDisplay').innerText = formatTime(lapTimeSeconds);
+    }
+
+    function startActiveTimer() {
+      if (!activeTimer) {
+        activeTimer = setInterval(() => {
+          if (isPaddling) {
+            activeTimeSeconds++;
+            lapTimeSeconds++;
+            updateTimeDisplays();
+          }
+        }, 1000);
+      }
+    }
+
+    function stopActiveTimer() {
+      if (activeTimer) {
+        clearInterval(activeTimer);
+        activeTimer = null;
+      }
+    }
+
+    function handleGpsPosition(pos) {
+      if (!pos.coords || pos.coords.speed === null || pos.coords.speed === undefined) return;
+
+      // Vitesse fournie en m/s par le GPS -> conversion en km/h
+      const speedKmH = Math.max(0, pos.coords.speed * 3.6);
+      document.getElementById('speedInstDisplay').innerText = speedKmH.toFixed(1);
+
+      // Cumul de la vitesse uniquement lors des phases actives de rame
+      if (isPaddling) {
+        activeSpeedSum += speedKmH;
+        activeSpeedCount++;
+        const avgSpeed = activeSpeedSum / activeSpeedCount;
+        document.getElementById('speedAvgDisplay').innerText = avgSpeed.toFixed(1);
+      }
+    }
+
+    startBtn.addEventListener('click', async () => {
+      if (!isRunning) {
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+          const permission = await DeviceMotionEvent.requestPermission();
+          if (permission !== 'granted') {
+            alert('Accès aux capteurs refusé');
+            return;
+          }
+        }
+
+        // Écoute capteurs de mouvement
+        window.addEventListener('devicemotion', handleMotion);
+        
+        // Écoute GPS
+        if ('geolocation' in navigator) {
+          watchId = navigator.geolocation.watchPosition(
+            handleGpsPosition, 
+            (err) => console.log(err), 
+            { enableHighAccuracy: true, maximumAge: 1000 }
+          );
+        }
+
+        startActiveTimer();
+        
+        if ('wakeLock' in navigator) {
+          try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+        }
+
+        isRunning = true;
+        startBtn.innerText = 'PAUSER SESSION';
+        startBtn.style.backgroundColor = 'var(--danger-color)';
+      } else {
+        window.removeEventListener('devicemotion', handleMotion);
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+        }
+        stopActiveTimer();
+        if (wakeLock) { wakeLock.release(); wakeLock = null; }
+        isRunning = false;
+        isPaddling = false;
+        startBtn.innerText = 'REPRENDRE LA SESSION';
+        startBtn.style.backgroundColor = 'var(--accent-color)';
+      }
+    });
+
+    function handleMotion(event) {
+      const acc = event.acceleration || event.accelerationIncludingGravity;
+      if (!acc) return;
+
+      const accZ = Math.abs(acc.z || 0);
+      const accY = Math.abs(acc.y || 0);
+      const currentAcc = Math.max(accZ, accY);
+
+      const currentTime = Date.now();
+
+      if (currentAcc > threshold) {
+        const timeDiff = currentTime - lastStrokeTime;
+
+        if (timeDiff > minInterval) {
+          strokeCount++;
+          document.getElementById('countDisplay').innerText = strokeCount;
+          document.getElementById('intensityDisplay').innerText = currentAcc.toFixed(1);
+
+          isPaddling = true;
+
+          clearTimeout(strokeTimeout);
+          strokeTimeout = setTimeout(() => {
+            isPaddling = false;
+            document.getElementById('spmDisplay').innerText = '0';
+            document.getElementById('speedInstDisplay').innerText = '0.0';
+          }, 3500);
+
+          if (lastStrokeTime > 0) {
+            const instantSPM = Math.round(60000 / timeDiff);
+            document.getElementById('spmDisplay').innerText = instantSPM;
+          }
+
+          lastStrokeTime = currentTime;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
